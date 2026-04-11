@@ -1,0 +1,76 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms1g -Xmx1g
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      RAG_ELASTICSEARCH_URL: http://elasticsearch:9200
+      RAG_REDIS_URL: redis://redis:6379/0
+      RAG_UPLOAD_DIR: /app/uploads
+      RAG_GEMINI_API_KEY: ${RAG_GEMINI_API_KEY:-}
+      RAG_GEMINI_EMBEDDING_MODEL: ${RAG_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      RAG_GEMINI_GENERATION_MODEL: ${RAG_GEMINI_GENERATION_MODEL:-gemini-2.5-flash}
+      RAG_EMBEDDING_DIMENSIONS: ${RAG_EMBEDDING_DIMENSIONS:-768}
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-1000}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-150}
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - uploads:/app/uploads
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: celery -A app.celery_app.celery_app worker --loglevel=INFO
+    environment:
+      RAG_ELASTICSEARCH_URL: http://elasticsearch:9200
+      RAG_REDIS_URL: redis://redis:6379/0
+      RAG_UPLOAD_DIR: /app/uploads
+      RAG_GEMINI_API_KEY: ${RAG_GEMINI_API_KEY:-}
+      RAG_GEMINI_EMBEDDING_MODEL: ${RAG_GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      RAG_GEMINI_GENERATION_MODEL: ${RAG_GEMINI_GENERATION_MODEL:-gemini-2.5-flash}
+      RAG_EMBEDDING_DIMENSIONS: ${RAG_EMBEDDING_DIMENSIONS:-768}
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-1000}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-150}
+    volumes:
+      - .:/app
+      - uploads:/app/uploads
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  esdata:
+  uploads:

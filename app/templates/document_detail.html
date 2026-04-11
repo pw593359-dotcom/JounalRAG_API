@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ document.filename }} - Journal RAG API{% endblock %}
+
+{% block content %}
+<section class="section">
+  <div class="section-head">
+    <div>
+      <p class="eyebrow">Document</p>
+      <h1>{{ document.filename }}</h1>
+    </div>
+    <form action="/admin/documents/{{ document.id }}/reindex" method="post">
+      <button type="submit">Reindex</button>
+    </form>
+  </div>
+
+  <dl class="meta-grid">
+    <div><dt>Status</dt><dd><span class="status status-{{ document.status }}">{{ document.status }}</span></dd></div>
+    <div><dt>Pages</dt><dd>{{ document.page_count or "-" }}</dd></div>
+    <div><dt>Chunks</dt><dd>{{ document.chunk_count or 0 }}</dd></div>
+    <div><dt>Updated</dt><dd>{{ document.updated_at }}</dd></div>
+  </dl>
+
+  {% if document.error %}
+  <div class="alert">{{ document.error }}</div>
+  {% endif %}
+
+  <h2>Preview</h2>
+  <pre class="preview">{{ document.text_preview or "No extracted text yet" }}</pre>
+
+  <h2>Chunks</h2>
+  <div class="list">
+    {% for chunk in chunks %}
+    <article class="item">
+      <div class="item-head">
+        <strong>#{{ chunk.chunk_index }}</strong>
+        <span>page {{ chunk.page_number or "-" }}</span>
+      </div>
+      <p>{{ chunk.text }}</p>
+    </article>
+    {% else %}
+    <p class="empty">No chunks</p>
+    {% endfor %}
+  </div>
+
+  <h2>Jobs</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Operation</th>
+          <th>Status</th>
+          <th>Stage</th>
+          <th>Progress</th>
+          <th>Updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in jobs %}
+        <tr>
+          <td>{{ job.operation }}</td>
+          <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
+          <td>{{ job.stage or "-" }}</td>
+          <td>{{ job.progress }}%</td>
+          <td>{{ job.updated_at }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="empty">No jobs</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+

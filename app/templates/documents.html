@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Documents - Journal RAG API{% endblock %}
+
+{% block content %}
+<section class="section">
+  <div class="section-head">
+    <div>
+      <p class="eyebrow">Library</p>
+      <h1>Documents</h1>
+    </div>
+  </div>
+
+  <form class="upload-panel" action="/admin/documents" method="post" enctype="multipart/form-data">
+    <label>
+      PDF
+      <input type="file" name="file" accept="application/pdf" required>
+    </label>
+    <label>
+      Metadata JSON
+      <textarea name="metadata_json" rows="4">{}</textarea>
+    </label>
+    <button type="submit">Upload</button>
+  </form>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>File</th>
+          <th>Status</th>
+          <th>Pages</th>
+          <th>Chunks</th>
+          <th>Updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for document in documents %}
+        <tr>
+          <td><a href="/admin/documents/{{ document.id }}">{{ document.filename }}</a></td>
+          <td><span class="status status-{{ document.status }}">{{ document.status }}</span></td>
+          <td>{{ document.page_count or "-" }}</td>
+          <td>{{ document.chunk_count or 0 }}</td>
+          <td>{{ document.updated_at }}</td>
+          <td class="actions">
+            <form action="/admin/documents/{{ document.id }}/delete" method="post">
+              <button class="secondary danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="empty">No documents</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+

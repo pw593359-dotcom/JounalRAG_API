@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Jobs - Journal RAG API{% endblock %}
+
+{% block content %}
+<section class="section">
+  <div class="section-head">
+    <div>
+      <p class="eyebrow">Queue</p>
+      <h1>Jobs</h1>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Document</th>
+          <th>Operation</th>
+          <th>Status</th>
+          <th>Stage</th>
+          <th>Progress</th>
+          <th>Updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in jobs %}
+        <tr>
+          <td><a href="/admin/documents/{{ job.document_id }}">{{ job.document_id }}</a></td>
+          <td>{{ job.operation }}</td>
+          <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
+          <td>{{ job.stage or "-" }}</td>
+          <td>{{ job.progress }}%</td>
+          <td>{{ job.updated_at }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="empty">No jobs</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Search - Journal RAG API{% endblock %}
+
+{% block content %}
+<section class="section">
+  <div class="section-head">
+    <div>
+      <p class="eyebrow">RAG</p>
+      <h1>Search</h1>
+    </div>
+  </div>
+
+  <form class="search-panel" action="/admin/search" method="post">
+    <label>
+      Query
+      <textarea name="query" rows="4" required>{{ query }}</textarea>
+    </label>
+    <label>
+      Top K
+      <input type="number" name="top_k" min="1" max="50" value="{{ top_k }}">
+    </label>
+    <label>
+      Mode
+      <select name="mode">
+        <option value="answer" {% if mode != "search" %}selected{% endif %}>Answer</option>
+        <option value="search" {% if mode == "search" %}selected{% endif %}>Search only</option>
+      </select>
+    </label>
+    <button type="submit">Run</button>
+  </form>
+
+  {% if error %}
+  <div class="alert">{{ error }}</div>
+  {% endif %}
+
+  {% if result %}
+    {% if result.answer %}
+    <section class="result">
+      <h2>Answer</h2>
+      <p>{{ result.answer }}</p>
+    </section>
+    {% endif %}
+
+    <h2>Citations</h2>
+    <div class="list">
+      {% set hits = result.citations if result.citations is defined else result.hits %}
+      {% for hit in hits %}
+      <article class="item">
+        <div class="item-head">
+          <strong>{{ hit.filename or hit.document_id }}</strong>
+          <span>page {{ hit.page_number or "-" }} / score {{ "%.3f"|format(hit.score) }}</span>
+        </div>
+        <p>{{ hit.text }}</p>
+      </article>
+      {% else %}
+      <p class="empty">No citations</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}
+
