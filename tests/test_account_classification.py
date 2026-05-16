@@ -3,10 +3,10 @@ from types import SimpleNamespace
 
 from app.account_classification import (
     build_account_classification_query,
-    build_candidate_alternatives,
     collect_low_confidence_fields,
     extract_account_title_candidates_from_hits,
     extract_receipt_classification_context,
+    normalize_ranked_candidates,
     normalize_to_candidate_title,
 )
 from app.prompting import build_account_classification_prompt
@@ -123,13 +123,25 @@ class AccountClassificationTests(unittest.TestCase):
 
         self.assertEqual(normalized, "交際接待費")
 
-    def test_build_candidate_alternatives_uses_only_pdf_titles(self):
-        alternatives = build_candidate_alternatives(
-            llm_alternatives=["事務用消耗品", "役員報酬", "雑費", "会議費"],
-            candidate_titles=["福利厚生費", "事務用消耗品費", "会議費", "雑費"],
+    def test_normalize_ranked_candidates_uses_only_pdf_titles_and_sorts_by_confidence(self):
+        candidates = normalize_ranked_candidates(
+            [
+                {"account_title": "事務用消耗品", "confidence": 0.91, "reason": "文具購入のため"},
+                {"account_title": "役員報酬", "confidence": 0.99, "reason": "不正候補"},
+                {"account_title": "雑費", "confidence": 0.2, "reason": "候補"},
+                {"account_title": "会議費", "confidence": 0.4, "reason": "候補"},
+            ],
+            ["福利厚生費", "事務用消耗品費", "会議費", "雑費"],
         )
 
-        self.assertEqual(alternatives, ["事務用消耗品費", "雑費", "会議費"])
+        self.assertEqual(
+            candidates,
+            [
+                {"account_title": "事務用消耗品費", "confidence": 0.91, "reason": "文具購入のため"},
+                {"account_title": "会議費", "confidence": 0.4, "reason": "候補"},
+                {"account_title": "雑費", "confidence": 0.2, "reason": "候補"},
+            ],
+        )
 
     def test_normalize_to_candidate_title_returns_empty_without_pdf_candidates(self):
         normalized = normalize_to_candidate_title("消耗品費", [])

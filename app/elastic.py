@@ -188,13 +188,20 @@ class ElasticRagStore:
     ) -> dict[str, Any]:
         classification_id = str(uuid4())
         now = utc_now()
+        top_account_title = ""
+        raw_candidates = response.get("candidates")
+        if isinstance(raw_candidates, list):
+            for item in raw_candidates:
+                if isinstance(item, dict) and item.get("account_title"):
+                    top_account_title = str(item["account_title"]).strip()
+                    break
         source = {
             "classification_id": classification_id,
             "ocr_result": ocr_result,
             "top_k": top_k,
             "filters": filters,
             "response": response,
-            "account_title": response.get("account_title"),
+            "account_title": top_account_title,
             "needs_review": bool(response.get("needs_review", False)),
             "created_at": now,
             "updated_at": now,

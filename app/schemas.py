@@ -226,15 +226,17 @@ class AccountClassificationRequest(BaseModel):
     )
 
 
-class AccountClassificationAlternative(BaseModel):
-    account_title: str = Field(description="代替候補の勘定科目名")
+class AccountClassificationCandidate(BaseModel):
+    account_title: str = Field(description="候補の勘定科目名")
+    confidence: float = Field(ge=0.0, le=1.0, description="候補の推定信頼度")
     reason: str = Field(description="その候補になる理由")
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "account_title": "雑費",
-                "reason": "購入内容が不明なため、少額であれば雑費として処理する可能性があります。",
+                "confidence": 0.42,
+                "reason": "購入内容が不明なため、少額で汎用的な費用科目として残る候補です。",
             }
         }
     )
@@ -242,14 +244,11 @@ class AccountClassificationAlternative(BaseModel):
 
 class AccountClassificationResponse(BaseModel):
     classification_id: str | None = Field(default=None, description="分類結果の保存ID")
-    account_title: str = Field(description="推定された勘定科目名")
-    confidence: float = Field(ge=0.0, le=1.0, description="推定信頼度")
-    reason: str = Field(description="推定理由")
-    evidence: list[str] = Field(default_factory=list, description="推定時に使った主要手掛かり")
-    alternatives: list[AccountClassificationAlternative] = Field(
+    candidates: list[AccountClassificationCandidate] = Field(
         default_factory=list,
-        description="代替候補",
+        description="信頼度順に並んだ勘定科目候補。最大3件",
     )
+    evidence: list[str] = Field(default_factory=list, description="推定時に使った主要手掛かり")
     needs_review: bool = Field(default=False, description="人手確認が必要かどうか")
     review_points: list[str] = Field(default_factory=list, description="確認すべきポイント")
     citations: list[SearchHit] = Field(default_factory=list, description="参照した文書チャンク")
@@ -258,11 +257,20 @@ class AccountClassificationResponse(BaseModel):
         json_schema_extra={
             "example": {
                 "classification_id": "2a88b2dd-1d9c-4521-a711-0ff2c52c7672",
-                "account_title": "消耗品費",
-                "confidence": 0.8,
-                "reason": "業務スーパーでの購入は、事業活動に必要な消耗品の購入である可能性が高いです。",
+                "candidates": [
+                    {
+                        "account_title": "消耗品費",
+                        "confidence": 0.8,
+                        "reason": "業務スーパーでの購入は、事業活動に必要な消耗品の購入である可能性が高いです。",
+                    },
+                    {
+                        "account_title": "福利厚生費",
+                        "confidence": 0.42,
+                        "reason": "従業員向けの飲食物や備品の購入であれば候補になります。",
+                    },
+                    AccountClassificationCandidate.model_config["json_schema_extra"]["example"],
+                ],
                 "evidence": ["業務スーパー桃谷店", "5860"],
-                "alternatives": [AccountClassificationAlternative.model_config["json_schema_extra"]["example"]],
                 "needs_review": True,
                 "review_points": [
                     "OCR信頼度が低い項目: amount_tax_excluded",

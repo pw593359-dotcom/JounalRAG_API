@@ -3,16 +3,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .account_classification import (
-    build_candidate_alternatives,
-    choose_preferred_account_title,
     dedupe_strings,
     extract_account_title_candidates_from_hits,
     extract_receipt_classification_context,
-    normalize_to_candidate_title,
+    normalize_ranked_candidates,
 )
 from .prompting import build_account_classification_prompt, build_answer_prompt
 from .schemas import (
-    AccountClassificationAlternative,
+    AccountClassificationCandidate,
     AccountClassificationResponse,
     AnswerResponse,
     SearchHit,
@@ -27,30 +25,25 @@ if TYPE_CHECKING:
 ACCOUNT_CLASSIFICATION_RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
-        "account_title": {"type": "string"},
-        "confidence": {"type": "number"},
-        "reason": {"type": "string"},
-        "evidence": {"type": "array", "items": {"type": "string"}},
-        "alternatives": {
+        "candidates": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
                     "account_title": {"type": "string"},
+                    "confidence": {"type": "number"},
                     "reason": {"type": "string"},
                 },
-                "required": ["account_title", "reason"],
+                "required": ["account_title", "confidence", "reason"],
             },
         },
+        "evidence": {"type": "array", "items": {"type": "string"}},
         "needs_review": {"type": "boolean"},
         "review_points": {"type": "array", "items": {"type": "string"}},
     },
     "required": [
-        "account_title",
-        "confidence",
-        "reason",
+        "candidates",
         "evidence",
-        "alternatives",
         "needs_review",
         "review_points",
     ],
@@ -158,53 +151,32 @@ class RagService:
         citations: list[SearchHit],
     ) -> AccountClassificationResponse:
         candidate_titles = extract_account_title_candidates_from_hits(citations)
-        account_title = _text_or_default(payload.get("account_title"), "要確認")
-        account_title = choose_preferred_account_title(
-            account_title,
-            candidate_titles=candidate_titles,
-        )
         additional_review_points: list[str] = []
-        if candidate_titles and not account_title:
-            additional_review_points.append("参照文書の勘定科目候補に一致する名称を選べませんでした。")
-            account_title = "要確認"
-        elif not candidate_titles:
+        if not candidate_titles:
             additional_review_points.append("参照文書から勘定科目候補を抽出できませんでした。")
-            account_title = "要確認"
 
-        confidence = _coerce_confidence(payload.get("confidence"))
-        reason = _text_or_default(payload.get("reason"), "根拠が不足しているため確認が必要です。")
         evidence = _string_list(payload.get("evidence"))
         if not citations and not evidence:
             evidence = ["勘定科目規程の検索結果は見つかりませんでした。"]
 
-        llm_alternative_titles = []
-        alternative_reason_map: dict[str, str] = {}
-        for item in payload.get("alternatives", []) if isinstance(payload.get("alternatives"), list) else []:
-            if not isinstance(item, dict):
-                continue
-            raw_title = _text_or_default(item.get("account_title"), "")
-            if not raw_title:
-                continue
-            llm_alternative_titles.append(raw_title)
-            alternative_reason_map[raw_title] = _text_or_default(item.get("reason"), "")
-
-        alternatives = []
-        for candidate_title in build_candidate_alternatives(
-            llm_alternatives=llm_alternative_titles,
-            candidate_titles=candidate_titles,
-            limit=3,
-        ):
-            mapped_reason = ""
-            for raw_title in llm_alternative_titles:
-                if normalize_to_candidate_title(raw_title, candidate_titles) == candidate_title:
-                    mapped_reason = alternative_reason_map.get(raw_title, "")
-                    break
-            alternatives.append(
-                AccountClassificationAlternative(
-                    account_title=candidate_title,
-                    reason=mapped_reason or "参照文書から抽出した勘定科目候補です。",
-                )
+        candidates = [
+            AccountClassificationCandidate(**item)
+            for item in normalize_ranked_candidates(
+                payload.get("candidates"),
+                candidate_titles,
+                limit=3,
             )
+        ]
+        if candidate_titles and not candidates:
+            additional_review_points.append("参照文書の勘定科目候補に一致する名称を選べませんでした。")
+        if not candidates:
+            candidates = [
+                AccountClassificationCandidate(
+                    account_title="要確認",
+                    confidence=0.0,
+                    reason="参照文書の勘定科目候補に一致する名称を選べないため確認が必要です。",
+                )
+            ]
 
         review_points = _merge_review_points(
             receipt_context.get("review_points") or [],
@@ -226,15 +198,12 @@ class RagService:
             needs_review = True
         if not citations:
             needs_review = True
-        if account_title == "要確認":
+        if candidates[0].account_title == "要確認":
             needs_review = True
 
         return AccountClassificationResponse(
-            account_title=account_title,
-            confidence=confidence,
-            reason=reason,
+            candidates=candidates,
             evidence=evidence,
-            alternatives=alternatives,
             needs_review=needs_review,
             review_points=review_points,
             citations=citations,
@@ -257,23 +226,18 @@ class RagService:
                 ["勘定科目規程の検索結果が見つかりませんでした。"],
             )
         return AccountClassificationResponse(
-            account_title="要確認",
-            confidence=0.0,
-            reason="勘定科目の推論結果を生成できなかったため、手動確認が必要です。",
+            candidates=[
+                AccountClassificationCandidate(
+                    account_title="要確認",
+                    confidence=0.0,
+                    reason="勘定科目の推論結果を生成できなかったため、手動確認が必要です。",
+                )
+            ],
             evidence=["API側でJSON形式の分類結果を生成できませんでした。"],
-            alternatives=[],
             needs_review=True,
             review_points=review_points,
             citations=citations,
         )
-
-
-def _coerce_confidence(value) -> float:
-    try:
-        confidence = float(value)
-    except (TypeError, ValueError):
-        return 0.0
-    return max(0.0, min(1.0, confidence))
 
 
 def _merge_review_points(base: list[str], extra: list[str]) -> list[str]:
@@ -284,8 +248,3 @@ def _string_list(value) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item).strip() for item in value if str(item).strip()]
-
-
-def _text_or_default(value, default: str) -> str:
-    text = str(value).strip() if value is not None else ""
-    return text or default

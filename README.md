@@ -82,6 +82,35 @@ curl -X POST http://localhost:8000/api/account-classifications \
   }'
 ```
 
+レスポンスは `candidates` に信頼度順の上位3件までを返します。
+
+```json
+{
+  "classification_id": "2a88b2dd-1d9c-4521-a711-0ff2c52c7672",
+  "candidates": [
+    {
+      "account_title": "消耗品費",
+      "confidence": 0.7,
+      "reason": "業務スーパーでの購入は、事務用品や日常業務で使用する消耗品の購入である可能性が高いです。"
+    },
+    {
+      "account_title": "福利厚生費",
+      "confidence": 0.42,
+      "reason": "従業員向けの飲食物や備品の購入であれば候補になります。"
+    },
+    {
+      "account_title": "雑費",
+      "confidence": 0.2,
+      "reason": "用途が不足しており、汎用的な費用科目として残る候補です。"
+    }
+  ],
+  "evidence": ["業務スーパー桃谷店", "5860"],
+  "needs_review": true,
+  "review_points": ["購入用途", "利用者または参加者"],
+  "citations": []
+}
+```
+
 複数のPDFを登録している場合は、`filters.document_id` または `filters.filename` で参照対象の勘定科目表を絞れます。
 
 ## 設定

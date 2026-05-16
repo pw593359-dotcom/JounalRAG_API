@@ -258,16 +258,25 @@
 
 ```json
 {
-  "account_title": "消耗品費",
-  "confidence": 0.7,
-  "reason": "業務スーパーでの購入は、事務用品や日常業務で使用する消耗品の購入である可能性が高いです。",
-  "evidence": ["業務スーパー桃谷店", "5860"],
-  "alternatives": [
+  "classification_id": "2a88b2dd-1d9c-4521-a711-0ff2c52c7672",
+  "candidates": [
+    {
+      "account_title": "消耗品費",
+      "confidence": 0.7,
+      "reason": "業務スーパーでの購入は、事務用品や日常業務で使用する消耗品の購入である可能性が高いです。"
+    },
     {
       "account_title": "福利厚生費",
-      "reason": "従業員向けの飲食物や備品の購入であれば福利厚生費に該当する可能性があります。"
+      "confidence": 0.42,
+      "reason": "従業員向けの飲食物や備品の購入であれば候補になります。"
+    },
+    {
+      "account_title": "雑費",
+      "confidence": 0.2,
+      "reason": "用途が不足しており、汎用的な費用科目として残る候補です。"
     }
   ],
+  "evidence": ["業務スーパー桃谷店", "5860"],
   "needs_review": true,
   "review_points": ["購入用途", "利用者または参加者"],
   "citations": [
@@ -626,7 +635,7 @@ Gemini の埋め込みモデルでクエリをベクトル化し、Elasticsearch
 
 ### 6.12 `POST /api/account-classifications`
 
-レシートOCR JSONを受け取り、勘定科目表PDFなどの登録文書をRAG検索した上で、該当しそうな勘定科目を推定します。
+レシートOCR JSONを受け取り、勘定科目表PDFなどの登録文書をRAG検索した上で、該当しそうな勘定科目候補を信頼度順に最大3件返します。
 
 #### Request
 
@@ -669,20 +678,25 @@ Gemini の埋め込みモデルでクエリをベクトル化し、Elasticsearch
 
 ```json
 {
-  "account_title": "消耗品費",
-  "confidence": 0.7,
-  "reason": "業務スーパーでの購入は、事務用品や日常業務で使用する消耗品の購入である可能性が高いです。",
-  "evidence": ["業務スーパー桃谷店", "5860"],
-  "alternatives": [
+  "classification_id": "2a88b2dd-1d9c-4521-a711-0ff2c52c7672",
+  "candidates": [
+    {
+      "account_title": "消耗品費",
+      "confidence": 0.7,
+      "reason": "業務スーパーでの購入は、事務用品や日常業務で使用する消耗品の購入である可能性が高いです。"
+    },
     {
       "account_title": "福利厚生費",
-      "reason": "従業員向けの飲食物や備品の購入であれば福利厚生費に該当する可能性があります。"
+      "confidence": 0.42,
+      "reason": "従業員向けの飲食物や備品の購入であれば候補になります。"
     },
     {
       "account_title": "会議費",
-      "reason": "会議用の飲食物や備品の購入であれば会議費に該当する可能性があります。"
+      "confidence": 0.18,
+      "reason": "会議用の飲食物や備品購入であれば候補になります。"
     }
   ],
+  "evidence": ["業務スーパー桃谷店", "5860"],
   "needs_review": true,
   "review_points": [
     "OCR信頼度が低い項目: issuer_address",
@@ -706,6 +720,7 @@ Gemini の埋め込みモデルでクエリをベクトル化し、Elasticsearch
 
 #### 備考
 
+- `candidates` は信頼度降順で、最大3件です
 - `needs_review` は、人手確認が必要な場合に `true` になります
 - OCRの信頼度が低い項目がある場合や、用途・参加者が不足している場合は `needs_review=true` に寄ります
 - `citations` には根拠として使ったチャンクを返します

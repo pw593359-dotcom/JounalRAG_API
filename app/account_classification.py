@@ -188,21 +188,42 @@ def choose_preferred_account_title(
     return normalize_to_candidate_title(account_title, candidate_titles)
 
 
-def build_candidate_alternatives(
-    *,
-    llm_alternatives: list[str],
+def normalize_ranked_candidates(
+    raw_candidates: Any,
     candidate_titles: list[str],
+    *,
     limit: int = 3,
-) -> list[str]:
-    alternatives: list[str] = []
-    for title in llm_alternatives:
-        normalized_title = normalize_to_candidate_title(title, candidate_titles)
-        if not normalized_title or normalized_title in alternatives:
-            continue
-        alternatives.append(normalized_title)
-        if len(alternatives) >= limit:
-            break
-    return alternatives
+) -> list[dict[str, Any]]:
+    if not candidate_titles:
+        return []
+
+    best_by_title: dict[str, dict[str, Any]] = {}
+    if isinstance(raw_candidates, list):
+        for item in raw_candidates:
+            if not isinstance(item, dict):
+                continue
+            normalized_title = normalize_to_candidate_title(
+                _as_string(item.get("account_title")),
+                candidate_titles,
+            )
+            if not normalized_title:
+                continue
+            confidence = _as_confidence(item.get("confidence"))
+            reason = _as_string(item.get("reason")) or "根拠が不足しているため確認が必要です。"
+            current = best_by_title.get(normalized_title)
+            if current and current["confidence"] >= confidence:
+                continue
+            best_by_title[normalized_title] = {
+                "account_title": normalized_title,
+                "confidence": confidence,
+                "reason": reason,
+            }
+
+    ranked = sorted(
+        best_by_title.values(),
+        key=lambda item: (-item["confidence"], candidate_titles.index(item["account_title"])),
+    )
+    return ranked[:limit]
 
 
 def normalize_to_candidate_title(account_title: str, candidate_titles: list[str]) -> str:
@@ -346,3 +367,11 @@ def _normalize_account_title(title: str) -> str:
     if normalized.endswith("費"):
         normalized = normalized[:-1]
     return normalized
+
+
+def _as_confidence(value: Any) -> float:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(1.0, confidence))

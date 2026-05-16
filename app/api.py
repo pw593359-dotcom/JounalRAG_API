@@ -170,7 +170,7 @@ def answer(
     summary="領収書OCRから勘定科目を推定",
     description=(
         "OCR済みレシートJSONを受け取り、登録済みPDFを検索した上で、"
-        "該当しそうな勘定科目を推定します。"
+        "該当しそうな勘定科目候補を信頼度順に最大3件返します。"
     ),
 )
 def classify_account(
@@ -209,5 +209,49 @@ def get_account_classification(
         top_k=record.get("top_k") or 0,
         filters=record.get("filters") or {},
         ocr_result=record.get("ocr_result") or {},
-        result=AccountClassificationResponse(**result),
+        result=AccountClassificationResponse(**_normalize_account_classification_result(result)),
     )
+
+
+def _normalize_account_classification_result(result: dict) -> dict:
+    normalized = dict(result)
+    if isinstance(normalized.get("candidates"), list):
+        return normalized
+
+    candidates = []
+    account_title = str(normalized.get("account_title") or "").strip()
+    reason = str(normalized.get("reason") or "").strip()
+    confidence = _coerce_confidence(normalized.get("confidence"))
+    if account_title:
+        candidates.append(
+            {
+                "account_title": account_title,
+                "confidence": confidence,
+                "reason": reason or "保存済み分類結果から復元した候補です。",
+            }
+        )
+    for item in normalized.get("alternatives") or []:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("account_title") or "").strip()
+        if not title:
+            continue
+        candidates.append(
+            {
+                "account_title": title,
+                "confidence": 0.0,
+                "reason": str(item.get("reason") or "").strip() or "保存済み代替候補から復元した候補です。",
+            }
+        )
+        if len(candidates) >= 3:
+            break
+    normalized["candidates"] = candidates
+    return normalized
+
+
+def _coerce_confidence(value: object) -> float:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(1.0, confidence))

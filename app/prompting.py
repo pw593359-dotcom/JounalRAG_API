@@ -49,20 +49,18 @@ def build_account_classification_prompt(
         "あなたは日本の経費精算における勘定科目分類アシスタントです。\n"
         "必ずJSONオブジェクトのみを返してください。Markdownやコードフェンスは禁止です。\n"
         "参照コンテキストに含まれる勘定科目、解説、仕訳例、運用ルールを最優先で使ってください。\n"
-        "参照コンテキストから抽出した勘定科目候補が空でなければ、account_title と alternatives はその候補一覧から選んでください。\n"
+        "参照コンテキストから抽出した勘定科目候補が空でなければ、candidates の account_title はその候補一覧から選んでください。\n"
         "参照コンテキストから抽出した勘定科目候補に正式名称があれば、その表記をそのまま使ってください。\n"
         "一般名に言い換えず、候補一覧にある正式名称を返してください。\n"
         "OCR JSONに存在しない用途、参加者、社内事情を断定しないでください。\n"
-        "参照コンテキストが弱い場合や候補一覧に適切な科目が見当たらない場合は account_title を 要確認 とし、needs_review を true にしてください。\n"
-        "account_title は単一の勘定科目名、confidence は 0 から 1 の数値、reason は日本語1-3文で返してください。\n"
-        "evidence は短い日本語文字列の配列、alternatives は最大3件、review_points は確認すべき点の配列にしてください。\n"
+        "上位3件までの候補を confidence の高い順で candidates に入れてください。候補が3件未満なら存在する件数だけ返してください。\n"
+        "参照コンテキストが弱い場合や候補一覧に適切な科目が見当たらない場合は candidates の先頭を 要確認 とし、needs_review を true にしてください。\n"
+        "各 candidate の account_title は単一の勘定科目名、confidence は 0 から 1 の数値、reason は日本語1-3文で返してください。\n"
+        "evidence は短い日本語文字列の配列、review_points は確認すべき点の配列にしてください。\n"
         "返却JSONのキー:\n"
         "{\n"
-        '  "account_title": string,\n'
-        '  "confidence": number,\n'
-        '  "reason": string,\n'
+        '  "candidates": [{"account_title": string, "confidence": number, "reason": string}],\n'
         '  "evidence": string[],\n'
-        '  "alternatives": [{"account_title": string, "reason": string}],\n'
         '  "needs_review": boolean,\n'
         '  "review_points": string[]\n'
         "}\n\n"
