@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     documents_index: str = "rag_documents"
     chunks_index: str = "rag_chunks"
     jobs_index: str = "rag_jobs"
+    account_classifications_index: str = "rag_account_classifications"
 
     redis_url: str = "redis://localhost:6379/0"
 
@@ -63,4 +64,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

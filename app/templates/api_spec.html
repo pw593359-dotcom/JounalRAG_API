@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}API Spec - Journal RAG API{% endblock %}
+
+{% block content %}
+<section class="section">
+  <div class="section-head">
+    <div>
+      <p class="eyebrow">Reference</p>
+      <h1>API Spec</h1>
+    </div>
+    <a class="button-link secondary" href="/docs">OpenAPI</a>
+  </div>
+
+  <article class="markdown-doc">
+    {{ spec_html | safe }}
+  </article>
+</section>
+{% endblock %}

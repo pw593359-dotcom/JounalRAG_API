@@ -22,13 +22,24 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Journal RAG API", lifespan=lifespan)
+app = FastAPI(
+    title="Journal RAG API",
+    description=(
+        "PDF文書をElasticsearchへ登録して検索・回答生成を行うRAG APIです。"
+        "あわせて、レシートOCR結果から勘定科目を推定するAPIも提供します。"
+    ),
+    lifespan=lifespan,
+)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(api_router)
 app.include_router(admin_router)
 
 
-@app.get("/")
+@app.get(
+    "/",
+    summary="APIルート情報を取得",
+    description="API名と、管理画面およびOpenAPIドキュメントへの入口を返します。",
+)
 def root() -> dict[str, str]:
     return {
         "name": "Journal RAG API",
@@ -37,7 +48,11 @@ def root() -> dict[str, str]:
     }
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    summary="ヘルスチェック",
+    description="API本体、Elasticsearch、Redis の接続状態を返します。",
+)
 def health() -> dict[str, object]:
     settings = get_app_settings()
     store = get_store()
@@ -62,4 +77,3 @@ def health() -> dict[str, object]:
         "redis": redis_ok,
         "environment": settings.environment,
     }
-

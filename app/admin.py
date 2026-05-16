@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from .api_spec import load_api_spec_html
 from .config import Settings
 from .dependencies import get_app_settings, get_rag_service, get_store
 from .document_service import create_document_from_upload, delete_document, enqueue_reindex
@@ -110,6 +111,17 @@ def search_page(request: Request):
             "top_k": 5,
             "result": None,
             "error": None,
+        },
+    )
+
+
+@router.get("/api-spec")
+def api_spec_page(request: Request):
+    return templates.TemplateResponse(
+        request,
+        "api_spec.html",
+        {
+            "spec_html": load_api_spec_html(),
         },
     )
 

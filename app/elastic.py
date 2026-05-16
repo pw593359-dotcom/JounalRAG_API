@@ -32,6 +32,7 @@ class ElasticRagStore:
         self._ensure_documents_index()
         self._ensure_chunks_index()
         self._ensure_jobs_index()
+        self._ensure_account_classifications_index()
 
     def create_document(
         self,
@@ -176,6 +177,45 @@ class ElasticRagStore:
             size=size,
         )
         return [self._with_id(hit["_id"], hit["_source"]) for hit in response["hits"]["hits"]]
+
+    def create_account_classification(
+        self,
+        *,
+        ocr_result: dict[str, Any],
+        top_k: int,
+        filters: dict[str, Any],
+        response: dict[str, Any],
+    ) -> dict[str, Any]:
+        classification_id = str(uuid4())
+        now = utc_now()
+        source = {
+            "classification_id": classification_id,
+            "ocr_result": ocr_result,
+            "top_k": top_k,
+            "filters": filters,
+            "response": response,
+            "account_title": response.get("account_title"),
+            "needs_review": bool(response.get("needs_review", False)),
+            "created_at": now,
+            "updated_at": now,
+        }
+        self.client.index(
+            index=self.settings.account_classifications_index,
+            id=classification_id,
+            document=source,
+            refresh=True,
+        )
+        return self._with_id(classification_id, source)
+
+    def get_account_classification(self, classification_id: str) -> dict[str, Any] | None:
+        try:
+            response = self.client.get(
+                index=self.settings.account_classifications_index,
+                id=classification_id,
+            )
+        except NotFoundError:
+            return None
+        return self._with_id(response["_id"], response["_source"])
 
     def replace_chunks(self, document_id: str, chunks: list[dict[str, Any]]) -> None:
         self.clear_chunks(document_id)
@@ -345,6 +385,26 @@ class ElasticRagStore:
             },
         )
 
+    def _ensure_account_classifications_index(self) -> None:
+        if self.client.indices.exists(index=self.settings.account_classifications_index):
+            return
+        self.client.indices.create(
+            index=self.settings.account_classifications_index,
+            mappings={
+                "properties": {
+                    "classification_id": {"type": "keyword"},
+                    "ocr_result": {"type": "object", "enabled": False},
+                    "top_k": {"type": "integer"},
+                    "filters": {"type": "object", "enabled": False},
+                    "response": {"type": "object", "enabled": False},
+                    "account_title": {"type": "keyword"},
+                    "needs_review": {"type": "boolean"},
+                    "created_at": {"type": "date"},
+                    "updated_at": {"type": "date"},
+                }
+            },
+        )
+
     def _build_filters(self, filters: dict[str, Any]) -> list[dict[str, Any]]:
         clauses: list[dict[str, Any]] = []
         for key, value in filters.items():
@@ -397,4 +457,3 @@ class ElasticRagStore:
 
     def _with_id(self, document_id: str, source: dict[str, Any]) -> dict[str, Any]:
         return {"id": document_id, **source}
-

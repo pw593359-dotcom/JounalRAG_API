@@ -28,6 +28,7 @@
 - 文書の取り込みジョブ管理
 - Elasticsearch ベースのハイブリッド検索
 - Gemini を利用した回答生成
+- レシートOCR JSONと勘定科目表PDFを使った勘定科目推定
 - 管理画面用のHTMLルート
 
 文書アップロード後は非同期で処理されます。  
@@ -212,6 +213,78 @@
 }
 ```
 
+### 4.6 AccountClassificationRequest
+
+```json
+{
+  "ocr_result": {
+    "lid": "772_20260319135523.7815_70d5",
+    "parent_id": "",
+    "type": "receipt",
+    "data": {
+      "date": "2026-01-13",
+      "amount": "5860",
+      "tax": "434",
+      "issuer": "業務スーパー桃谷店",
+      "issuer_address": "大阪市生野区桃谷1-10-22",
+      "issuer_tel": ["0667121205"],
+      "recipient": "",
+      "options": {
+        "registration_number": ["T9122001020907"],
+        "amount_type": "unknown",
+        "confidences": {
+          "date": 0.952,
+          "amount": 0.97,
+          "tax": 0.934,
+          "issuer": 0.865
+        }
+      }
+    }
+  },
+  "top_k": 5,
+  "filters": {
+    "filename": "勘定科目表.pdf"
+  }
+}
+```
+
+備考:
+
+- `ocr_result` は任意JSONですが、実装上は `type` と `data` 配下の主要項目を使います
+- `filters` を省略すると全登録文書が検索対象です
+- 複数の勘定科目表PDFがある場合は `document_id` または `filename` で絞る前提です
+
+### 4.7 AccountClassificationResponse
+
+```json
+{
+  "account_title": "消耗品費",
+  "confidence": 0.7,
+  "reason": "業務スーパーでの購入は、事務用品や日常業務で使用する消耗品の購入である可能性が高いです。",
+  "evidence": ["業務スーパー桃谷店", "5860"],
+  "alternatives": [
+    {
+      "account_title": "福利厚生費",
+      "reason": "従業員向けの飲食物や備品の購入であれば福利厚生費に該当する可能性があります。"
+    }
+  ],
+  "needs_review": true,
+  "review_points": ["購入用途", "利用者または参加者"],
+  "citations": [
+    {
+      "chunk_id": "ab19b099-ed2a-4a7a-8bdb-2461a537bc9f:19",
+      "document_id": "ab19b099-ed2a-4a7a-8bdb-2461a537bc9f",
+      "filename": "勘定科目表.pdf",
+      "page_number": 16,
+      "chunk_index": 19,
+      "text": "737 消耗品費 ...",
+      "score": 10.609652,
+      "metadata": {}
+    }
+  ]
+}
+```
+
 ## 5. エンドポイント一覧
 
 | Method | Path | 説明 |
@@ -227,6 +300,7 @@
 | `GET` | `/api/jobs/{job_id}` | ジョブ詳細取得 |
 | `POST` | `/api/search` | 検索 |
 | `POST` | `/api/answer` | 回答生成 |
+| `POST` | `/api/account-classifications` | レシートOCR JSONから勘定科目推定 |
 
 ## 6. 詳細仕様
 
@@ -550,6 +624,93 @@ Gemini の埋め込みモデルでクエリをベクトル化し、Elasticsearch
 }
 ```
 
+### 6.12 `POST /api/account-classifications`
+
+レシートOCR JSONを受け取り、勘定科目表PDFなどの登録文書をRAG検索した上で、該当しそうな勘定科目を推定します。
+
+#### Request
+
+- Content-Type: `application/json`
+
+```json
+{
+  "ocr_result": {
+    "lid": "772_20260319135523.7815_70d5",
+    "parent_id": "",
+    "type": "receipt",
+    "data": {
+      "date": "2026-01-13",
+      "amount": "5860",
+      "tax": "434",
+      "issuer": "業務スーパー桃谷店",
+      "issuer_address": "大阪市生野区桃谷1-10-22",
+      "issuer_tel": ["0667121205"],
+      "recipient": "",
+      "options": {
+        "registration_number": ["T9122001020907"],
+        "amount_type": "unknown",
+        "confidences": {
+          "date": 0.952,
+          "amount": 0.97,
+          "tax": 0.934,
+          "issuer": 0.865
+        }
+      }
+    }
+  },
+  "top_k": 5,
+  "filters": {
+    "filename": "勘定科目表.pdf"
+  }
+}
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "account_title": "消耗品費",
+  "confidence": 0.7,
+  "reason": "業務スーパーでの購入は、事務用品や日常業務で使用する消耗品の購入である可能性が高いです。",
+  "evidence": ["業務スーパー桃谷店", "5860"],
+  "alternatives": [
+    {
+      "account_title": "福利厚生費",
+      "reason": "従業員向けの飲食物や備品の購入であれば福利厚生費に該当する可能性があります。"
+    },
+    {
+      "account_title": "会議費",
+      "reason": "会議用の飲食物や備品の購入であれば会議費に該当する可能性があります。"
+    }
+  ],
+  "needs_review": true,
+  "review_points": [
+    "OCR信頼度が低い項目: issuer_address",
+    "購入用途",
+    "利用者または参加者"
+  ],
+  "citations": [
+    {
+      "chunk_id": "ab19b099-ed2a-4a7a-8bdb-2461a537bc9f:19",
+      "document_id": "ab19b099-ed2a-4a7a-8bdb-2461a537bc9f",
+      "filename": "勘定科目表.pdf",
+      "page_number": 16,
+      "chunk_index": 19,
+      "text": "737 消耗品費 ...",
+      "score": 10.609652,
+      "metadata": {}
+    }
+  ]
+}
+```
+
+#### 備考
+
+- `needs_review` は、人手確認が必要な場合に `true` になります
+- OCRの信頼度が低い項目がある場合や、用途・参加者が不足している場合は `needs_review=true` に寄ります
+- `citations` には根拠として使ったチャンクを返します
+- 参照PDFを固定したい場合は `filters.document_id` または `filters.filename` を付けてください
+
 ## 7. 管理画面ルート
 
 以下は API というより HTML 管理画面です。
@@ -563,6 +724,7 @@ Gemini の埋め込みモデルでクエリをベクトル化し、Elasticsearch
 | `POST` | `/admin/documents/{document_id}/delete` | 画面から文書削除 |
 | `POST` | `/admin/documents/{document_id}/reindex` | 画面から再処理 |
 | `GET` | `/admin/jobs` | ジョブ一覧画面 |
+| `GET` | `/admin/api-spec` | Markdown仕様書のHTML表示 |
 | `GET` | `/admin/search` | 検索テスト画面 |
 | `POST` | `/admin/search` | 画面から検索または回答生成 |
 
@@ -570,6 +732,7 @@ Gemini の埋め込みモデルでクエリをベクトル化し、Elasticsearch
 
 - `http://localhost:8000/admin/documents`
 - `http://localhost:8000/admin/jobs`
+- `http://localhost:8000/admin/api-spec`
 - `http://localhost:8000/admin/search`
 
 ## 8. OpenAPI 参照
@@ -583,7 +746,6 @@ Gemini の埋め込みモデルでクエリをベクトル化し、Elasticsearch
 
 以下は現時点では本仕様書の対象外です。
 
-- 領収書OCR JSON から勘定科目を推定する専用API
 - 認証/認可
 - APIキー
 - レート制限

@@ -24,6 +24,7 @@ docker compose up --build
 起動後に使う主なURLです。
 
 - 管理画面: `http://localhost:8000/admin/documents`
+- API仕様書HTML: `http://localhost:8000/admin/api-spec`
 - OpenAPI: `http://localhost:8000/docs`
 - ヘルスチェック: `http://localhost:8000/health`
 - Elasticsearch: `http://localhost:9200`
@@ -47,6 +48,41 @@ curl -X POST http://localhost:8000/api/answer \
   -H "Content-Type: application/json" \
   -d '{"query":"契約更新日は？","top_k":5,"filters":{}}'
 ```
+
+```bash
+curl -X POST http://localhost:8000/api/account-classifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ocr_result": {
+      "lid": "772_20260319135523.7815_70d5",
+      "type": "receipt",
+      "data": {
+        "date": "2026-01-13",
+        "amount": "5860",
+        "tax": "434",
+        "issuer": "業務スーパー桃谷店",
+        "issuer_address": "大阪市生野区桃谷1-10-22",
+        "issuer_tel": ["0667121205"],
+        "options": {
+          "registration_number": ["T9122001020907"],
+          "amount_type": "unknown",
+          "confidences": {
+            "date": 0.952,
+            "amount": 0.97,
+            "tax": 0.934,
+            "issuer": 0.865
+          }
+        }
+      }
+    },
+    "top_k": 5,
+    "filters": {
+      "filename": "勘定科目表.pdf"
+    }
+  }'
+```
+
+複数のPDFを登録している場合は、`filters.document_id` または `filters.filename` で参照対象の勘定科目表を絞れます。
 
 ## 設定
 
@@ -79,4 +115,3 @@ pytest
 - スキャンPDFのOCRは行いません。
 - 認証、APIキー、レート制限、監査ログは未実装です。
 - メタデータ、文書、チャンク、ジョブ状態は Elasticsearch のみに保存します。
-
